@@ -1,0 +1,4 @@
+interface:
+  display_name: "TCL p32a6 Root 与儿童桌面"
+  short_description: "TCL Android 5.1 按次 Root、持久授权、默认桌面和可回退实机验证"
+  default_prompt: "使用 $tcl-p32a6-root-launcher 检查我的 TCL p32a6，按已授权范围配置 Root 和默认桌面，保留备份与回退。"

@@ -1,0 +1,294 @@
+diff --git a/Superuser/jni/sqlite3/sqlite3.c b/Superuser/jni/sqlite3/sqlite3.c
+index 3248e6b..4019de1 100644
+--- a/Superuser/jni/sqlite3/sqlite3.c
++++ b/Superuser/jni/sqlite3/sqlite3.c
+@@ -23317,7 +23317,7 @@ static struct unix_syscall {
+   { "fchown",       (sqlite3_syscall_ptr)posixFchown,     0 },
+ #define osFchown    ((int(*)(int,uid_t,gid_t))aSyscall[20].pCurrent)
+ 
+-  { "umask",        (sqlite3_syscall_ptr)umask,           0 },
++  { "umask",        (sqlite3_syscall_ptr)((mode_t (*)(mode_t))umask),           0 },
+ #define osUmask     ((mode_t(*)(mode_t))aSyscall[21].pCurrent)
+ 
+ }; /* End of the overrideable system calls */
+diff --git a/Superuser/jni/su/binds.c b/Superuser/jni/su/binds.c
+index 5697bb6..5bc9e7e 100644
+--- a/Superuser/jni/su/binds.c
++++ b/Superuser/jni/su/binds.c
+@@ -83,65 +83,75 @@ error:
+     return res;
+ }
+ 
+-int bind_uniq_dst(const char *dst) {
+-    static int _res;
+-    static const char *_dst;
+-
+-	_res = 1;
+-    _dst = dst;
+-    auto void cb(void *arg, int uid, const char *src, const char *dst) {
+-        if(strcmp(dst, _dst) == 0)
+-            _res = 0;
++static int bind_uniq_dst__res;
++static const char *bind_uniq_dst__dst;
++static void bind_uniq_dst_cb(void *arg, int uid, const char *src, const char *dst) {
++        if(strcmp(dst, bind_uniq_dst__dst) == 0)
++            bind_uniq_dst__res = 0;
+     }
+-    if(!bind_foreach(cb, NULL))
++int bind_uniq_dst(const char *dst) {
++
++
++
++	bind_uniq_dst__res = 1;
++    bind_uniq_dst__dst = dst;
++
++    if(!bind_foreach(bind_uniq_dst_cb, NULL))
+         return 0;
+-    return _res;
++    return bind_uniq_dst__res;
+ }
+ 
+-void bind_ls(int uid) {
+-    static int _uid;
+-	_uid=uid;
+-    auto void cb(void *arg, int uid, const char *src, const char *dst) {
+-		if(_uid == 0 || _uid == 2000 || _uid == uid) {
++static int bind_ls__uid;
++static void bind_ls_cb(void *arg, int uid, const char *src, const char *dst) {
++		if(bind_ls__uid == 0 || bind_ls__uid == 2000 || bind_ls__uid == uid) {
+ 			fprintf(stderr, "%d %s => %s\n", uid, src, dst);
+ 		}
+     }
+-    bind_foreach(cb, NULL);
++void bind_ls(int uid) {
++
++	bind_ls__uid=uid;
++
++    bind_foreach(bind_ls_cb, NULL);
+ }
+ 
+-int bind_remove(const char *path, int uid) {
+-	static int _found = 0;
+-    static const char *_path;
+-	static int _fd;
+-	static int _uid;
+-
+-
+-	_path = path;
+-	_found = 0;
+-	_uid = uid;
+-
+-	unlink(BINDS_TMP_PATH);
+-	_fd = open(BINDS_TMP_PATH, O_WRONLY|O_CREAT, 0600);
+-	if(_fd<0)
+-		return 0;
+-
+-    auto void cb(void *arg, int uid, const char *src, const char *dst) {
++static int bind_remove__found = 0;
++static const char *bind_remove__path;
++static int bind_remove__fd;
++static int bind_remove__uid;
++static void bind_remove_cb(void *arg, int uid, const char *src, const char *dst) {
+ 		//The one we want to drop
+-        if(strcmp(dst, _path) == 0 &&
+-				(_uid == 0 || _uid == 2000 || _uid == uid)) {
+-			_found = 1;
++        if(strcmp(dst, bind_remove__path) == 0 &&
++				(bind_remove__uid == 0 || bind_remove__uid == 2000 || bind_remove__uid == uid)) {
++			bind_remove__found = 1;
+ 			return;
+ 		}
+ 		char *str = NULL;
+ 		int len = asprintf(&str, "%d:%s:%s", uid, src, dst);
+-		write(_fd, str, len+1); //len doesn't include final \0 and we want to write it
++		write(bind_remove__fd, str, len+1); //len doesn't include final \0 and we want to write it
+ 		free(str);
+     }
+-    bind_foreach(cb, NULL);
+-	close(_fd);
++int bind_remove(const char *path, int uid) {
++
++
++
++
++
++
++	bind_remove__path = path;
++	bind_remove__found = 0;
++	bind_remove__uid = uid;
++
++	unlink(BINDS_TMP_PATH);
++	bind_remove__fd = open(BINDS_TMP_PATH, O_WRONLY|O_CREAT, 0600);
++	if(bind_remove__fd<0)
++		return 0;
++
++
++    bind_foreach(bind_remove_cb, NULL);
++	close(bind_remove__fd);
+ 	unlink(BINDS_PATH);
+ 	rename(BINDS_TMP_PATH, BINDS_PATH);
+-	return _found;
++	return bind_remove__found;
+ }
+ 
+ int init_foreach(init_cb icb, void* arg) {
+@@ -186,61 +196,71 @@ error:
+     return res;
+ }
+ 
+-int init_uniq(const char *path) {
+-    static int _res;
+-    static const char *_path;
+-
+-	_res = 1;
+-    _path = path;
+-    auto void cb(void *arg, int uid, const char *path) {
+-        if(strcmp(path, _path) == 0)
+-            _res = 0;
++static int init_uniq__res;
++static const char *init_uniq__path;
++static void init_uniq_cb(void *arg, int uid, const char *path) {
++        if(strcmp(path, init_uniq__path) == 0)
++            init_uniq__res = 0;
+     }
+-    if(!init_foreach(cb, NULL))
++int init_uniq(const char *path) {
++
++
++
++	init_uniq__res = 1;
++    init_uniq__path = path;
++
++    if(!init_foreach(init_uniq_cb, NULL))
+         return 0;
+-    return _res;
++    return init_uniq__res;
+ }
+ 
+-int init_remove(const char *path, int uid) {
+-	static int _found = 0;
+-    static const char *_path;
+-	static int fd;
+-	static int _uid;
+-
+-	_path = path;
+-	_found = 0;
+-	_uid = uid;
+-
+-	unlink("/data/su/init.new");
+-	fd = open("/data/su/init.new", O_WRONLY|O_CREAT, 0600);
+-	if(fd<0)
+-		return 0;
+-
+-    auto void cb(void *arg, int uid, const char *path) {
++static int init_remove__found = 0;
++static const char *init_remove__path;
++static int init_remove_fd;
++static int init_remove__uid;
++static void init_remove_cb(void *arg, int uid, const char *path) {
+ 		//The one we want to drop
+-        if(strcmp(path, _path) == 0 &&
+-				(_uid == 0 || _uid == 2000 || uid == _uid)) {
+-			_found = 1;
++        if(strcmp(path, init_remove__path) == 0 &&
++				(init_remove__uid == 0 || init_remove__uid == 2000 || uid == init_remove__uid)) {
++			init_remove__found = 1;
+ 			return;
+ 		}
+ 		char *str = NULL;
+ 		int len = asprintf(&str, "%d:%s", uid, path);
+-		write(fd, str, len+1); //len doesn't include final \0 and we want to write it
++		write(init_remove_fd, str, len+1); //len doesn't include final \0 and we want to write it
+ 		free(str);
+     }
+-    init_foreach(cb, NULL);
+-	close(fd);
++int init_remove(const char *path, int uid) {
++
++
++
++
++
++	init_remove__path = path;
++	init_remove__found = 0;
++	init_remove__uid = uid;
++
++	unlink("/data/su/init.new");
++	init_remove_fd = open("/data/su/init.new", O_WRONLY|O_CREAT, 0600);
++	if(init_remove_fd<0)
++		return 0;
++
++
++    init_foreach(init_remove_cb, NULL);
++	close(init_remove_fd);
+ 	unlink("/data/su/init");
+ 	rename("/data/su/init.new", "/data/su/init");
+-	return _found;
++	return init_remove__found;
+ }
+ 
+-void init_ls(int uid) {
+-	static int _uid;
+-	_uid = uid;
+-    auto void cb(void *arg, int uid, const char *path) {
+-		if(_uid == 2000 || _uid == 0 || _uid == uid)
++static int init_ls__uid;
++static void init_ls_cb(void *arg, int uid, const char *path) {
++		if(init_ls__uid == 2000 || init_ls__uid == 0 || init_ls__uid == uid)
+ 			fprintf(stderr, "%d %s\n", uid, path);
+     }
+-    init_foreach(cb, NULL);
++void init_ls(int uid) {
++
++	init_ls__uid = uid;
++
++    init_foreach(init_ls_cb, NULL);
+ }
+diff --git a/Superuser/jni/su/daemon.c b/Superuser/jni/su/daemon.c
+index 310272a..3bfa17d 100644
+--- a/Superuser/jni/su/daemon.c
++++ b/Superuser/jni/su/daemon.c
+@@ -503,11 +503,8 @@ static void prepare_su_bind() {
+ 	}
+ }
+ 
+-static void prepare_binds() {
+-	mkdir("/data/su", 0700);
++static void prepare_bind_callback(void *arg, int uid, const char *src, const char *dst) {
+ 	static int i = 0;
+-
+-	auto void cb(void *arg, int uid, const char *src, const char *dst) {
+ 		int ret = 0;
+ 
+ 		char *tmpfile = NULL;
+@@ -546,11 +543,15 @@ static void prepare_binds() {
+ 			return;
+ 		}
+ 	}
+-	bind_foreach(cb, NULL);
++
++static void prepare_binds() {
++	mkdir("/data/su", 0700);
++
++
++	bind_foreach(prepare_bind_callback, NULL);
+ }
+ 
+-static void do_init() {
+-	auto void cb(void *arg, int uid, const char *path) {
++static void init_callback(void *arg, int uid, const char *path) {
+ 		int ret = 0;
+ 
+ 		int p = fork();
+@@ -567,7 +568,10 @@ static void do_init() {
+ 		LOGE("Failed to execute %s as shell script", path);
+ 		_exit(1);
+ 	}
+-	init_foreach(cb, NULL);
++
++static void do_init() {
++
++	init_foreach(init_callback, NULL);
+ }
+ 
+ static void prepare() {

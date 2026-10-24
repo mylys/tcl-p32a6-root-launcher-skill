@@ -1,0 +1,23 @@
+# All device captures, downloads, generated binaries and signing material stay local.
+/work/
+/backup/
+/dist/
+/vendor/
+**/__pycache__/
+*.pyc
+*.apk
+*.idsig
+*.jks
+*.keystore
+*.pem
+*.key
+*.p12
+*.img
+*.img.gz
+*.oat
+*.odex
+*.dex
+*.class
+*.jar
+*password*.txt
+.DS_Store
